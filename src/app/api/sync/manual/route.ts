@@ -26,8 +26,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: result.success,
       message: syncType === 'full' 
-        ? `전체 동기화 완료: ${result.filesAdded}개 추가, ${result.filesUpdated}개 수정`
-        : `증분 동기화 완료: ${result.changesProcessed}개 처리`,
+        ? `전체 동기화 완료: 추가 ${result.filesAdded}개, 수정 ${result.filesUpdated}개, 삭제 ${result.filesDeleted}개`
+        : `증분 동기화 완료: 추가 ${result.filesAdded}개, 수정 ${result.filesUpdated}개, 삭제 ${result.filesDeleted}개`,
       data: result,
     });
   } catch (error) {
