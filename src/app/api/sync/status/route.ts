@@ -9,62 +9,48 @@ export async function GET() {
   try {
     const supabase = createApiClient();
     
-    // 1. 마지막 동기화 로그 조회
+    // 1. 마지막 동기화 로그 조회 (sync_logs 테이블)
     const { data: lastSync, error: syncError } = await supabase
-      .from('dropbox_sync_log')
+      .from('sync_logs')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('started_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
+    // 에러가 있고 "no rows" 에러가 아닌 경우만 throw
     if (syncError && syncError.code !== 'PGRST116') {
-      throw syncError;
+      console.error('[Sync Status] sync_logs 조회 오류:', syncError);
     }
 
-    // 2. 커서 정보 조회
-    const { data: cursor, error: cursorError } = await supabase
-      .from('dropbox_cursor')
-      .select('*')
-      .eq('id', 1)
-      .single();
-
-    if (cursorError && cursorError.code !== 'PGRST116') {
-      throw cursorError;
-    }
-
-    // 3. 전체 파일 통계
-    const { data: fileStats, error: statsError } = await supabase
+    // 2. 전체 파일 통계
+    const { count: totalFiles, error: filesError } = await supabase
       .from('files')
-      .select('is_active')
-      .eq('is_active', true);
+      .select('*', { count: 'exact', head: true });
 
-    if (statsError) throw statsError;
+    if (filesError) {
+      console.error('[Sync Status] files 통계 오류:', filesError);
+    }
 
-    // 4. 교재별 통계
-    const { data: textbookStats, error: textbookError } = await supabase
+    // 3. 교재 통계
+    const { count: totalTextbooks, error: textbooksError } = await supabase
       .from('textbooks')
-      .select('id, name, total_clicks');
+      .select('*', { count: 'exact', head: true });
 
-    if (textbookError) throw textbookError;
+    if (textbooksError) {
+      console.error('[Sync Status] textbooks 통계 오류:', textbooksError);
+    }
 
+    // 4. 응답 형식 (프론트엔드가 기대하는 SyncStatus 인터페이스에 맞춤)
     return NextResponse.json({
       success: true,
-      data: {
-        lastSync: lastSync ? {
-          type: lastSync.sync_type,
-          status: lastSync.status,
-          timestamp: lastSync.created_at,
-          metadata: lastSync.metadata,
-        } : null,
-        cursor: cursor ? {
-          lastUpdated: cursor.updated_at,
-          hasCursor: !!cursor.cursor_value,
-        } : null,
-        statistics: {
-          totalFiles: fileStats?.length || 0,
-          totalTextbooks: textbookStats?.length || 0,
-          textbooks: textbookStats || [],
-        },
+      status: {
+        is_syncing: false, // TODO: 실제 동기화 진행 상태 체크
+        last_sync_at: lastSync?.started_at || null,
+        last_sync_type: lastSync?.type || null,
+        last_sync_status: lastSync?.status || null,
+        last_sync_error: lastSync?.error_message || null,
+        total_files: totalFiles || 0,
+        total_textbooks: totalTextbooks || 0,
       },
     });
   } catch (error) {
@@ -73,7 +59,7 @@ export async function GET() {
       {
         success: false,
         message: '동기화 상태 조회 중 오류가 발생했습니다.',
-        error: String(error),
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

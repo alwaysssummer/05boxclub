@@ -42,6 +42,7 @@ export async function fullSync(rootPath?: string): Promise<{
   success: boolean;
   filesAdded: number;
   filesUpdated: number;
+  filesDeleted: number;
   errors: string[];
 }> {
   const dbx = getDropboxClient();
@@ -53,6 +54,7 @@ export async function fullSync(rootPath?: string): Promise<{
     success: true,
     filesAdded: 0,
     filesUpdated: 0,
+    filesDeleted: 0,
     errors: [] as string[],
   };
 
@@ -154,6 +156,49 @@ export async function fullSync(rootPath?: string): Promise<{
       }
     }
 
+    // ==========================================
+    // 삭제된 파일 처리
+    // ==========================================
+    console.log('[Full Sync] 삭제된 파일 확인 중...');
+    
+    // Dropbox에 존재하는 파일의 경로 목록
+    const existingDropboxPaths = pdfFiles.map(f => f.path_lower);
+    
+    if (existingDropboxPaths.length > 0) {
+      // DB에서 활성화된 파일 중 Dropbox에 없는 파일 비활성화
+      const { data: deletedFiles, error: deleteError } = await supabase
+        .from('files')
+        .update({ is_active: false })
+        .not('dropbox_path', 'in', `(${existingDropboxPaths.map(p => `"${p}"`).join(',')})`)
+        .eq('is_active', true)
+        .select('dropbox_path');
+      
+      if (deleteError) {
+        console.error('[Full Sync] 삭제 처리 오류:', deleteError);
+        results.errors.push(`삭제 처리 실패: ${deleteError.message}`);
+      } else if (deletedFiles && deletedFiles.length > 0) {
+        results.filesDeleted = deletedFiles.length;
+        console.log(`[Full Sync] ${results.filesDeleted}개 파일 비활성화 완료`);
+        deletedFiles.forEach(f => console.log(`  - ${f.dropbox_path}`));
+      }
+    } else {
+      console.log('[Full Sync] Dropbox에 파일이 없음. 모든 파일 비활성화');
+      // Dropbox에 파일이 하나도 없으면 모든 파일 비활성화
+      const { data: deletedFiles, error: deleteError } = await supabase
+        .from('files')
+        .update({ is_active: false })
+        .eq('is_active', true)
+        .select('dropbox_path');
+      
+      if (deleteError) {
+        console.error('[Full Sync] 전체 비활성화 오류:', deleteError);
+        results.errors.push(`전체 비활성화 실패: ${deleteError.message}`);
+      } else if (deletedFiles) {
+        results.filesDeleted = deletedFiles.length;
+        console.log(`[Full Sync] ${results.filesDeleted}개 파일 비활성화 완료`);
+      }
+    }
+
     // 동기화 커서 저장
     await saveSyncCursor(response.result.cursor);
 
@@ -161,9 +206,10 @@ export async function fullSync(rootPath?: string): Promise<{
     await logSync('full', syncPath, 'success', {
       filesAdded: results.filesAdded,
       filesUpdated: results.filesUpdated,
+      filesDeleted: results.filesDeleted,
     });
 
-    console.log(`[Full Sync] 완료: ${results.filesAdded}개 추가`);
+    console.log(`[Full Sync] 완료: ${results.filesAdded}개 추가, ${results.filesDeleted}개 삭제`);
   } catch (error) {
     results.success = false;
     const errorMsg = `전체 동기화 실패: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
@@ -186,12 +232,18 @@ export async function fullSync(rootPath?: string): Promise<{
 export async function incrementalSync(): Promise<{
   success: boolean;
   changesProcessed: number;
+  filesAdded: number;
+  filesUpdated: number;
+  filesDeleted: number;
   errors: string[];
 }> {
   const dbx = getDropboxClient();
   const results = {
     success: true,
     changesProcessed: 0,
+    filesAdded: 0,
+    filesUpdated: 0,
+    filesDeleted: 0,
     errors: [] as string[],
   };
 
@@ -230,11 +282,17 @@ export async function incrementalSync(): Promise<{
       try {
         if (entry['.tag'] === 'file' && isPdfFile(entry.name)) {
           // PDF 파일 추가/수정
-          await syncFile(entry as files.FileMetadataReference);
+          const isNew = await syncFile(entry as files.FileMetadataReference);
+          if (isNew) {
+            results.filesAdded++;
+          } else {
+            results.filesUpdated++;
+          }
           results.changesProcessed++;
         } else if (entry['.tag'] === 'deleted') {
           // 파일 삭제
           await deleteFile(entry.path_lower!);
+          results.filesDeleted++;
           results.changesProcessed++;
         }
       } catch (error) {
@@ -250,9 +308,12 @@ export async function incrementalSync(): Promise<{
     // 동기화 로그 기록
     await logSync('incremental', '', 'success', {
       changesProcessed: results.changesProcessed,
+      filesAdded: results.filesAdded,
+      filesUpdated: results.filesUpdated,
+      filesDeleted: results.filesDeleted,
     });
 
-    console.log(`[Incremental Sync] 완료: ${results.changesProcessed}개 처리`);
+    console.log(`[Incremental Sync] 완료: ${results.changesProcessed}개 처리 (추가: ${results.filesAdded}, 수정: ${results.filesUpdated}, 삭제: ${results.filesDeleted})`);
   } catch (error) {
     results.success = false;
     const errorMsg = `증분 동기화 실패: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
@@ -270,8 +331,9 @@ export async function incrementalSync(): Promise<{
 
 /**
  * 개별 파일 동기화
+ * @returns {boolean} 새로 추가된 파일이면 true, 기존 파일 업데이트면 false
  */
-async function syncFile(file: files.FileMetadataReference) {
+async function syncFile(file: files.FileMetadataReference): Promise<boolean> {
   const supabase = getSupabase();
   const textbookName = extractTextbookName(file.path_display!);
 
@@ -293,7 +355,16 @@ async function syncFile(file: files.FileMetadataReference) {
     textbook = newTextbook;
   }
 
-  // 2. 파일 정보 저장/업데이트
+  // 2. 기존 파일 확인
+  const { data: existingFile } = await supabase
+    .from('files')
+    .select('id')
+    .eq('dropbox_path', file.path_lower)
+    .single();
+
+  const isNewFile = !existingFile;
+
+  // 3. 파일 정보 저장/업데이트
   const { error } = await supabase
     .from('files')
     .upsert({
@@ -307,12 +378,14 @@ async function syncFile(file: files.FileMetadataReference) {
       last_modified: file.server_modified,
       is_active: true,
     }, {
-      onConflict: 'dropbox_file_id',
+      onConflict: 'dropbox_path',
     });
 
   if (error) throw error;
 
-  console.log(`[Sync File] ${file.path_display} 동기화 완료`);
+  console.log(`[Sync File] ${file.path_display} ${isNewFile ? '추가' : '업데이트'} 완료`);
+  
+  return isNewFile;
 }
 
 /**

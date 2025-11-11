@@ -21,12 +21,14 @@ export default function PDFViewer() {
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [showBanner, setShowBanner] = useState(true);
+  const [pdfLoadSuccess, setPdfLoadSuccess] = useState(false);
 
   // 파일 선택 시 PDF URL 가져오기
   useEffect(() => {
     if (!selectedFile) {
       setPdfUrl(null);
       setError(null);
+      setPdfLoadSuccess(false);
       return;
     }
 
@@ -38,15 +40,32 @@ export default function PDFViewer() {
 
     setLoading(true);
     setError(null);
+    setPdfLoadSuccess(false);
 
     try {
       // Proxy API를 통해 PDF 미리보기 (CORS 우회)
       const previewUrl = `/api/files/proxy?fileId=${selectedFile.id}`;
+      
+      // 미리 응답 확인
+      const testResponse = await fetch(previewUrl);
+      if (!testResponse.ok) {
+        const errorData = await testResponse.json().catch(() => null);
+        if (errorData?.error?.includes('Access Token')) {
+          setError('Dropbox 연동이 필요합니다. 관리자에게 문의하세요.');
+        } else {
+          setError(errorData?.error || '파일을 불러올 수 없습니다.');
+        }
+        setPdfLoadSuccess(false);
+        setLoading(false);
+        return;
+      }
+      
       setPdfUrl(previewUrl);
       console.log('[PDFViewer] PDF 로드 성공 (Proxy 사용):', selectedFile.name);
     } catch (err) {
       console.error('[PDFViewer] 로딩 오류:', err);
       setError('파일을 불러오는 중 네트워크 오류가 발생했습니다.');
+      setPdfLoadSuccess(false);
     } finally {
       setLoading(false);
     }
@@ -64,7 +83,14 @@ export default function PDFViewer() {
       const response = await fetch(downloadUrl);
       
       if (!response.ok) {
-        throw new Error('파일 다운로드 실패');
+        const errorData = await response.json().catch(() => null);
+        if (errorData?.error?.includes('Access Token')) {
+          setError('Dropbox 연동이 필요합니다. 관리자에게 문의하세요.');
+        } else {
+          setError(errorData?.error || '파일 다운로드에 실패했습니다.');
+        }
+        setDownloading(false);
+        return;
       }
       
       const blob = await response.blob();
@@ -127,8 +153,8 @@ export default function PDFViewer() {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Chrome PDF 설정 안내 배너 */}
-      {showBanner && (
+      {/* Chrome PDF 설정 안내 배너 - PDF 로드 실패시에만 표시 */}
+      {showBanner && !pdfLoadSuccess && pdfUrl && !loading && (
         <div className="bg-red-50 dark:bg-red-950 border-b-2 border-red-300 dark:border-red-700 px-4 py-3">
           <div className="flex items-center justify-between gap-4 max-w-5xl mx-auto">
             <div className="flex items-center gap-3 min-w-0">
@@ -241,8 +267,15 @@ export default function PDFViewer() {
             src={pdfUrl}
             className="w-full h-full border-0"
             title={selectedFile.name}
-            onLoad={() => console.log('[PDFViewer] PDF 로드 완료')}
-            onError={() => setError('PDF를 표시할 수 없습니다.')}
+            onLoad={() => {
+              console.log('[PDFViewer] PDF 로드 완료');
+              setPdfLoadSuccess(true);
+            }}
+            onError={() => {
+              console.log('[PDFViewer] PDF 로드 실패 - iframe 에러');
+              setError('PDF를 표시할 수 없습니다.');
+              setPdfLoadSuccess(false);
+            }}
           />
         )}
       </div>
