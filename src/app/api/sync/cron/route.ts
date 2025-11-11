@@ -5,13 +5,10 @@ import { incrementalSync } from '@/lib/dropbox/sync';
  * Cron Job을 통한 자동 동기화
  * Vercel Cron 또는 외부 스케줄러에서 5분마다 호출
  * 
- * Vercel 설정 (vercel.json):
- * {
- *   "crons": [{
- *     "path": "/api/sync/cron",
- *     "schedule": "every 5 minutes"
- *   }]
- * }
+ * Vercel 설정 예시 (vercel.json):
+ * - schedule: "0 * * * *" (매 시간 정각)
+ * - schedule: "0 0 * * *" (매일 자정)
+ * - schedule: "0 12 * * *" (매일 정오)
  */
 export async function GET(request: Request) {
   try {
