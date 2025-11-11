@@ -259,6 +259,9 @@ export async function incrementalSync(): Promise<{
       return {
         success: fullSyncResult.success,
         changesProcessed: fullSyncResult.filesAdded + fullSyncResult.filesUpdated,
+        filesAdded: fullSyncResult.filesAdded,
+        filesUpdated: fullSyncResult.filesUpdated,
+        filesDeleted: fullSyncResult.filesDeleted,
         errors: fullSyncResult.errors,
       };
     }
