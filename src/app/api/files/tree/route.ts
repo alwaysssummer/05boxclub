@@ -53,8 +53,13 @@ export async function GET(request: Request) {
       textbooksWithStats.sort((a, b) => a.name.localeCompare(b.name));
     }
     
+    // 3.5. 파일이 없는 교재 제외 (Dropbox에서 삭제된 폴더 필터링)
+    const filteredTextbooks = textbooksWithStats.filter(
+      textbook => textbook.fileCount > 0
+    );
+    
     // 4. 파일 트리 구조 생성
-    const tree = textbooksWithStats.map(textbook => {
+    const tree = filteredTextbooks.map(textbook => {
       const files = textbook.files || [];
       
       // 파일을 경로별로 그룹화
