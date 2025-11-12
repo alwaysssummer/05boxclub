@@ -27,7 +27,7 @@ export async function GET() {
         name: name,
         nameWithoutExt: nameWithoutExt,
         length: name.length,
-        charCodes: Array.from(name).map(c => c.charCodeAt(0)),
+        charCodes: Array.from(name).map((c: string) => c.charCodeAt(0)),
         hasSpace: name.includes(' '),
         hasEnglish: /[A-Za-z]/.test(nameWithoutExt),
         hasNumber: /[0-9]/.test(nameWithoutExt),
