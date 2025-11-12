@@ -68,6 +68,7 @@ export default function TextbookDetailPage() {
 
   useEffect(() => {
     fetchTextbookDetails();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchTextbookDetails = async () => {

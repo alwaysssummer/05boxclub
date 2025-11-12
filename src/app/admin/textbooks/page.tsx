@@ -58,6 +58,7 @@ export default function TextbooksPage() {
 
   useEffect(() => {
     fetchTextbooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sortBy, sortOrder, search]);
 
   const toggleActive = async (id: string, currentStatus: boolean) => {

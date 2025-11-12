@@ -87,7 +87,7 @@ export async function GET(request: Request) {
         click_count,
         last_modified,
         textbook_id,
-        textbooks (
+        textbooks!inner (
           id,
           name,
           dropbox_path
@@ -113,9 +113,9 @@ export async function GET(request: Request) {
       fileCount: number;
     }>();
     
-    (activeFiles || []).forEach(file => {
+    (activeFiles || []).forEach((file: any) => {
       const textbook = file.textbooks;
-      if (!textbook) {
+      if (!textbook || typeof textbook !== 'object' || !textbook.id) {
         console.warn(`[Files Tree] 파일 ${file.name}의 교재 정보 없음`);
         return;
       }
