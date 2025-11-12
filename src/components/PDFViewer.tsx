@@ -187,8 +187,8 @@ export default function PDFViewer() {
         </div>
       )}
 
-      {/* 상단 툴바 */}
-      <div className="border-b px-4 py-3 flex items-center justify-between bg-background">
+      {/* 상단 툴바 - 간결한 한 줄 */}
+      <div className="border-b px-4 py-2 flex items-center justify-between bg-background">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <Button
             variant="ghost"
@@ -201,14 +201,7 @@ export default function PDFViewer() {
           
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <h3 className="font-semibold truncate">{selectedFile.name}</h3>
-              <p className="text-xs text-muted-foreground">
-                {selectedFile.file_size > 0 && formatFileSize(selectedFile.file_size)}
-                {selectedFile.file_size > 0 && selectedFile.last_modified && ' • '}
-                {selectedFile.last_modified && formatDate(selectedFile.last_modified)}
-              </p>
-            </div>
+            <h3 className="font-semibold truncate">{selectedFile.name}</h3>
           </div>
         </div>
 
