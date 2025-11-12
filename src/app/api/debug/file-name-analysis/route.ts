@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createApiClient } from '@/lib/supabase/api';
 
 /**
- * 파일명 상세 분석
+ * 파일명 상세 분석 (ver 6.0)
  */
 export async function GET() {
   try {
