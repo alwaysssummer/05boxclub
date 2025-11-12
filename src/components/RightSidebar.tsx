@@ -1,20 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Clock, TrendingUp, Bell, FileText } from 'lucide-react';
+import { TrendingUp, Bell, ThumbsUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
-
-interface RecentFile {
-  id: string;
-  clicked_at: string;
-  files: {
-    id: string;
-    name: string;
-    click_count: number;
-  };
-}
 
 interface TextbookRequest {
   id: string;
@@ -32,71 +22,34 @@ interface Notice {
 }
 
 export default function RightSidebar() {
-  const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
   const [requests, setRequests] = useState<TextbookRequest[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [loading, setLoading] = useState(true);
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [noticesLoading, setNoticesLoading] = useState(true);
 
-  // 최근 조회 자료 로드
-  const loadRecentFiles = async () => {
+  // 교재 요청 클릭 핸들러
+  const handleRequestClick = async (textbookName: string) => {
     try {
-      const supabase = createClient();
+      const response = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ textbookName }),
+      });
+
+      const data = await response.json();
       
-      if (!supabase) {
-        console.error('Supabase 클라이언트 생성 실패');
-        return;
+      if (response.ok) {
+        const remaining = data.remainingCount !== undefined ? data.remainingCount : '?';
+        alert(`요청이 등록되었습니다!\n24시간 내 남은 추천 횟수: ${remaining}회`);
+        loadRequests(); // 목록 새로고침
+      } else if (response.status === 429) {
+        alert(data.error || '24시간 내 최대 5회까지만 추천할 수 있습니다.');
+      } else {
+        alert('요청 실패: ' + (data.error || '알 수 없는 오류'));
       }
-      
-      const { data, error } = await supabase
-        .from('file_clicks')
-        .select(`
-          id,
-          clicked_at,
-          files:file_id (
-            id,
-            name,
-            click_count
-          )
-        `)
-        .not('file_id', 'is', null)
-        .order('clicked_at', { ascending: false })
-        .limit(10);
-
-      if (error) {
-        console.error('최근 조회 로드 실패:', error);
-        console.error('에러 상세:', JSON.stringify(error, null, 2));
-        return;
-      }
-
-      // 중복 파일 제거 (같은 파일의 최신 클릭만 표시)
-      const uniqueFiles: RecentFile[] = [];
-      const seenFileIds = new Set<string>();
-
-      for (const item of data || []) {
-        const fileData = item.files as any;
-        if (fileData && typeof fileData === 'object' && fileData.id && !seenFileIds.has(fileData.id)) {
-          // files가 배열이 아닌 단일 객체로 변환
-          const recentFile: RecentFile = {
-            id: item.id,
-            clicked_at: item.clicked_at,
-            files: {
-              id: fileData.id,
-              name: fileData.name,
-              click_count: fileData.click_count
-            }
-          };
-          uniqueFiles.push(recentFile);
-          seenFileIds.add(fileData.id);
-        }
-      }
-
-      setRecentFiles(uniqueFiles.slice(0, 5)); // TOP 5만 표시
     } catch (error) {
-      console.error('최근 조회 로드 에러:', error);
-    } finally {
-      setLoading(false);
+      console.error('요청 실패:', error);
+      alert('요청 중 오류가 발생했습니다.');
     }
   };
 
@@ -144,37 +97,10 @@ export default function RightSidebar() {
   };
 
   useEffect(() => {
-    loadRecentFiles();
     loadRequests();
     loadNotices();
   }, []);
 
-  // Realtime 구독 - file_clicks 테이블 변경 감지
-  useEffect(() => {
-    const supabase = createClient();
-
-    const channel = supabase
-      .channel('file-clicks-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'file_clicks',
-        },
-        (payload) => {
-          console.log('[Realtime] 새 클릭 감지:', payload);
-          // 새 클릭 발생 시 목록 갱신
-          loadRecentFiles();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Realtime 구독 - textbook_requests 테이블 변경 감지
   useEffect(() => {
@@ -266,15 +192,12 @@ export default function RightSidebar() {
             </div>
           ) : (
             notices.map((notice) => (
-              <div
-                key={notice.id}
-                className="p-3 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-200/50 dark:border-blue-800/50"
-              >
-                <p className="font-semibold mb-1">{notice.title}</p>
+              <div key={notice.id} className="space-y-1">
+                <p className="font-semibold text-sm">{notice.title}</p>
                 <p className="text-xs text-muted-foreground whitespace-pre-wrap">
                   {notice.content}
                 </p>
-                <p className="text-[10px] text-muted-foreground mt-2">
+                <p className="text-[10px] text-muted-foreground">
                   {formatTimeAgo(notice.created_at)}
                 </p>
               </div>
@@ -304,72 +227,32 @@ export default function RightSidebar() {
             requests.map((request, index) => (
               <div
                 key={request.id}
-                className="flex items-start gap-2 p-2 rounded hover:bg-accent transition-colors"
+                className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-accent transition-colors"
               >
-                <div className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-[10px] font-bold text-primary">
+                <div className="flex-shrink-0 w-4 h-4 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-primary">
                     {index + 1}
                   </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">
-                    {request.textbook_name}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {request.request_count}명이 요청
-                  </p>
-                </div>
-                <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                <p className="flex-1 text-xs font-medium truncate min-w-0">
+                  {request.textbook_name}
+                </p>
+                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
                   {request.request_count}
                 </Badge>
+                <button
+                  onClick={() => handleRequestClick(request.textbook_name)}
+                  className="flex-shrink-0 p-0.5 hover:bg-blue-100 dark:hover:bg-blue-900 rounded transition-colors"
+                  title="나도 요청"
+                >
+                  <ThumbsUp className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                </button>
               </div>
             ))
           )}
         </CardContent>
       </Card>
 
-      {/* 최근 조회 자료 */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            최근 조회 자료
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {loading ? (
-            <div className="text-xs text-muted-foreground">
-              로딩 중...
-            </div>
-          ) : recentFiles.length === 0 ? (
-            <div className="text-xs text-muted-foreground">
-              아직 조회한 자료가 없습니다.
-            </div>
-          ) : (
-            recentFiles.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-start gap-2 p-2 rounded hover:bg-accent transition-colors"
-              >
-                <FileText className="w-3 h-3 mt-0.5 flex-shrink-0 text-red-500" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">
-                    {item.files.name}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {formatTimeAgo(item.clicked_at)}
-                  </p>
-                </div>
-                {item.files.click_count > 0 && (
-                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                    {item.files.click_count}
-                  </Badge>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

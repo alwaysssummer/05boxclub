@@ -14,9 +14,9 @@ import {
   Folder,
   Search,
   RefreshCw,
-  Flame,
-  Book,
-  BookPlus
+  BookPlus,
+  Box,
+  Book
 } from 'lucide-react';
 
 interface FileItem {
@@ -51,7 +51,6 @@ export default function LeftSidebar() {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['all']));
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'name' | 'clicks'>('name');
   const [loading, setLoading] = useState(true);
   const [lastSync, setLastSync] = useState<string>('');
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
@@ -59,7 +58,7 @@ export default function LeftSidebar() {
   // 데이터 로드
   const loadData = async () => {
     try {
-      const res = await fetch(`/api/files/tree?sort=${sortBy}`);
+      const res = await fetch(`/api/files/tree?sort=name`);
       const json = await res.json();
       
       if (json.success) {
@@ -80,7 +79,7 @@ export default function LeftSidebar() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy]);
+  }, []);
 
   // Supabase Realtime 구독
   useEffect(() => {
@@ -118,7 +117,7 @@ export default function LeftSidebar() {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sortBy]);
+  }, []);
 
   // 파일 클릭 처리 (클릭 추적 + 파일 선택)
   const handleFileClick = async (file: FileItem) => {
@@ -259,42 +258,30 @@ export default function LeftSidebar() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* 상단: 검색 및 정렬 */}
-      <div className="p-3 border-b space-y-2">
+      {/* 상단: 타이틀 + 검색 */}
+      <div className="p-3 border-b space-y-3">
+        {/* 타이틀 */}
+        <div className="flex items-center gap-2 py-1 px-1">
+          <div className="relative">
+            <Box className="w-6 h-6 text-gray-800 dark:text-gray-200" strokeWidth={2.5} />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-sm" />
+            </div>
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100">
+            05box<span className="text-gray-500 dark:text-gray-400">.CLUB</span>
+          </h1>
+        </div>
+
+        {/* 검색 */}
         <div className="relative">
           <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="교재 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-9"
+            className="pl-8 h-9 border-blue-300 focus:border-blue-500 focus:ring-blue-500 dark:border-blue-700 dark:focus:border-blue-500"
           />
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            variant={sortBy === 'name' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSortBy('name')}
-            className="flex-1"
-          >
-            이름순
-          </Button>
-          <Button
-            variant={sortBy === 'clicks' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setSortBy('clicks')}
-            className="flex-1"
-          >
-            클릭순
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadData}
-          >
-            <RefreshCw className="w-4 h-4" />
-          </Button>
         </div>
       </div>
 
@@ -356,14 +343,9 @@ export default function LeftSidebar() {
               <span className="flex-1 truncate text-sm font-medium">{textbook.name}</span>
               
               {textbook.totalClicks > 0 && (
-                <>
-                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                    {textbook.totalClicks}
-                  </Badge>
-                  {sortBy === 'clicks' && textbook.totalClicks > 100 && (
-                    <Flame className="w-3.5 h-3.5 text-orange-500" />
-                  )}
-                </>
+                <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                  {textbook.totalClicks}
+                </Badge>
               )}
             </div>
 

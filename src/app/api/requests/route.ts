@@ -27,27 +27,31 @@ export async function POST(request: NextRequest) {
                'unknown';
     const anonymizedIp = ip.split('.').slice(0, 3).join('.') + '.xxx';
 
-    // 1. 중복 요청 체크 (동일 IP에서 24시간 이내 동일 교재 요청)
+    // 1. 중복 요청 체크 (동일 IP에서 24시간 이내 5회까지 허용)
     const oneDayAgo = new Date();
     oneDayAgo.setHours(oneDayAgo.getHours() - 24);
 
+    // 24시간 내 해당 IP의 요청 횟수 조회
     const { data: recentRequests, error: recentError } = await supabase
-      .from('textbook_requests')
-      .select('id, updated_at')
+      .from('textbook_request_logs')
+      .select('id')
       .eq('textbook_name', textbookName.trim())
       .eq('user_ip', anonymizedIp)
-      .gte('updated_at', oneDayAgo.toISOString());
+      .gte('created_at', oneDayAgo.toISOString());
 
-    if (recentError) {
+    if (recentError && recentError.code !== 'PGRST116') {
       console.error('최근 요청 조회 실패:', recentError);
       // 에러가 나도 계속 진행 (중복 방지는 선택사항)
     }
 
-    if (recentRequests && recentRequests.length > 0) {
+    const requestCount = recentRequests?.length || 0;
+    
+    if (requestCount >= 5) {
       return NextResponse.json(
         { 
-          error: '이미 요청하신 교재입니다. 24시간 이후 다시 요청해주세요.',
-          duplicate: true
+          error: '24시간 내 최대 5회까지만 추천할 수 있습니다. 나중에 다시 시도해주세요.',
+          duplicate: true,
+          remainingCount: 0
         },
         { status: 429 } // Too Many Requests
       );
@@ -69,7 +73,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. 기존 요청이 있으면 카운트 증가, 없으면 새로 생성
+    // 3. 요청 로그 기록 (24시간 내 5회 제한 추적용)
+    const { error: logError } = await supabase
+      .from('textbook_request_logs')
+      .insert({
+        textbook_name: textbookName.trim(),
+        user_ip: anonymizedIp,
+      });
+
+    if (logError) {
+      console.error('요청 로그 기록 실패:', logError);
+      // 로그 실패해도 요청은 진행
+    }
+
+    // 4. 기존 요청이 있으면 카운트 증가, 없으면 새로 생성
     if (existingRequest) {
       // 카운트 증가 (마지막 요청자 IP도 업데이트)
       const { error: updateError } = await supabase
@@ -92,6 +109,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: '교재 요청이 접수되었습니다.',
+        remainingCount: 5 - requestCount - 1,
         request: {
           id: existingRequest.id,
           textbook_name: existingRequest.textbook_name,
@@ -122,6 +140,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: '교재 요청이 접수되었습니다.',
+        remainingCount: 5 - requestCount - 1,
         request: {
           id: newRequest.id,
           textbook_name: newRequest.textbook_name,

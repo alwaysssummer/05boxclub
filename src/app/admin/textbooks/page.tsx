@@ -453,7 +453,7 @@ export default function TextbooksManagementPage() {
 
   // 카테고리 삭제
   const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('이 카테고리를 삭제하시겠습니까?\n교재는 "미분류"로 이동됩니다.')) {
+    if (!confirm('이 카테고리를 삭제하시겠습니까?\n교재는 &quot;미분류&quot;로 이동됩니다.')) {
       return;
     }
 
@@ -584,7 +584,7 @@ export default function TextbooksManagementPage() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <div>
+      <div>
           <h1 className="text-3xl font-bold">교재 관리</h1>
           <p className="text-muted-foreground mt-1">
             교재를 드래그하여 카테고리 간 이동할 수 있습니다
@@ -624,8 +624,8 @@ export default function TextbooksManagementPage() {
             <Button variant="outline" onClick={() => setShowAddCategory(false)}>
               취소
             </Button>
+            </div>
           </div>
-        </div>
       )}
 
       {/* 드래그 앤 드롭 컨텍스트 */}
@@ -678,7 +678,7 @@ export default function TextbooksManagementPage() {
           <li>• <strong>교재 이동:</strong> 교재의 ⣿ 핸들을 드래그하여 다른 카테고리로 이동할 수 있습니다</li>
           <li>• <strong>카테고리 편집:</strong> 카테고리 이름을 클릭하거나 편집 버튼을 눌러 수정할 수 있습니다</li>
           <li>• <strong>실시간 반영:</strong> 변경사항은 즉시 사용자 페이지에 반영됩니다</li>
-          <li>• <strong>카테고리 삭제:</strong> 카테고리를 삭제하면 해당 교재는 "미분류"로 이동됩니다</li>
+          <li>• <strong>카테고리 삭제:</strong> 카테고리를 삭제하면 해당 교재는 &quot;미분류&quot;로 이동됩니다</li>
         </ul>
       </div>
     </div>
