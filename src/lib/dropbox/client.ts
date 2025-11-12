@@ -57,6 +57,11 @@ async function getAccessToken(): Promise<string> {
 
     console.log('[Dropbox] 새 Access Token 발급 성공, 만료까지:', Math.floor((tokenExpiry - Date.now()) / 1000 / 60), '분');
 
+    // TypeScript를 위한 null 체크 후 반환
+    if (!cachedAccessToken) {
+      throw new Error('Access Token 저장 실패');
+    }
+    
     return cachedAccessToken;
   } catch (error) {
     console.error('[Dropbox] 토큰 발급 중 오류:', error);
