@@ -46,6 +46,11 @@ async function getAccessToken(): Promise<string> {
     }
 
     const data = await response.json();
+    
+    if (!data.access_token) {
+      throw new Error('Dropbox 응답에 access_token이 없습니다.');
+    }
+    
     cachedAccessToken = data.access_token;
     // 만료 시간 5분 전으로 설정 (안전 마진)
     tokenExpiry = Date.now() + (data.expires_in - 300) * 1000;
