@@ -127,6 +127,7 @@ export async function GET(request: Request) {
           name,
           dropbox_path,
           category_id,
+          display_order,
           categories (
             id,
             name,
@@ -151,6 +152,7 @@ export async function GET(request: Request) {
       name: string;
       dropbox_path: string;
       category_id: string | null;
+      display_order: number;
       category: any;
       files: any[];
       totalClicks: number;
@@ -172,6 +174,7 @@ export async function GET(request: Request) {
           name: textbook.name,
           dropbox_path: textbook.dropbox_path,
           category_id: textbook.category_id || null,
+          display_order: textbook.display_order ?? 999,
           category: textbook.categories || null,
           files: [],
           totalClicks: 0,
@@ -197,12 +200,29 @@ export async function GET(request: Request) {
     // 3. Map을 배열로 변환
     let textbooksWithStats = Array.from(textbookMap.values());
     
-    // 4. 정렬
-    if (sortBy === 'clicks') {
-      textbooksWithStats.sort((a, b) => b.totalClicks - a.totalClicks);
-    } else {
-      textbooksWithStats.sort((a, b) => a.name.localeCompare(b.name));
-    }
+    // 4. 정렬 (카테고리별 display_order 우선, 같은 카테고리 내에서는 교재 display_order 순)
+    textbooksWithStats.sort((a, b) => {
+      // 카테고리가 없는 교재는 맨 뒤로
+      if (!a.category_id && b.category_id) return 1;
+      if (a.category_id && !b.category_id) return -1;
+      
+      // 카테고리가 다르면 카테고리 순서로 정렬
+      const categoryOrderA = a.category?.display_order ?? 999;
+      const categoryOrderB = b.category?.display_order ?? 999;
+      if (categoryOrderA !== categoryOrderB) {
+        return categoryOrderA - categoryOrderB;
+      }
+      
+      // 같은 카테고리 내에서는 교재 display_order로 정렬
+      const displayOrderA = a.display_order ?? 999;
+      const displayOrderB = b.display_order ?? 999;
+      if (displayOrderA !== displayOrderB) {
+        return displayOrderA - displayOrderB;
+      }
+      
+      // display_order도 같으면 이름순
+      return a.name.localeCompare(b.name);
+    });
     
     console.log(`[Files Tree] 정렬 완료 (기준: ${sortBy})`);
     

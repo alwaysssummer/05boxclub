@@ -525,7 +525,7 @@ export default function TextbooksManagementPage() {
       return;
     }
 
-    // 2. 교재 이동인지 확인
+    // 2. 교재 이동/순서 변경인지 확인
     const draggedTextbook = textbooks.find(t => t.id === active.id);
     if (!draggedTextbook) return;
 
@@ -541,10 +541,56 @@ export default function TextbooksManagementPage() {
       targetCategoryId = over.id === 'uncategorized' ? null : (over.id as string);
     }
 
-    // 같은 카테고리면 무시
     const currentCategoryId = draggedTextbook.category?.id || null;
-    if (currentCategoryId === targetCategoryId) return;
 
+    // 2-1. 같은 카테고리 내에서 순서 변경
+    if (currentCategoryId === targetCategoryId && targetTextbook) {
+      console.log(`교재 순서 변경: ${draggedTextbook.name} ↔ ${targetTextbook.name}`);
+      
+      // 같은 카테고리 내의 모든 교재 가져오기
+      const categoryTextbooks = textbooks.filter(t => 
+        (t.category?.id || null) === currentCategoryId
+      );
+
+      const oldIndex = categoryTextbooks.findIndex(t => t.id === active.id);
+      const newIndex = categoryTextbooks.findIndex(t => t.id === over.id);
+
+      // 낙관적 UI 업데이트
+      const reorderedTextbooks = [...categoryTextbooks];
+      const [movedTextbook] = reorderedTextbooks.splice(oldIndex, 1);
+      reorderedTextbooks.splice(newIndex, 0, movedTextbook);
+
+      // display_order 재정렬
+      const updatedTextbooks = reorderedTextbooks.map((textbook, index) => ({
+        id: textbook.id,
+        display_order: index + 1,
+      }));
+
+      // API 호출
+      try {
+        const res = await fetch('/api/admin/textbooks/reorder', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            textbooks: updatedTextbooks,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          // 데이터 새로고침
+          loadData();
+        } else {
+          alert('교재 순서 변경 실패: ' + (data.error || '알 수 없는 오류'));
+        }
+      } catch (error) {
+        console.error('교재 순서 변경 실패:', error);
+        alert('교재 순서 변경 실패');
+      }
+      return;
+    }
+
+    // 2-2. 다른 카테고리로 이동
     console.log(`교재 이동: ${draggedTextbook.name} → 카테고리 ID: ${targetCategoryId || 'null'}`);
 
     // API 호출
