@@ -239,27 +239,23 @@ export async function GET(request: Request) {
       // 파일을 경로별로 그룹화
       const filesByPath = files.reduce((acc, file) => {
         const path = file.dropbox_path || '';
-        const parts = path.split('/').filter(Boolean);
         
-        // 경로 구조 생성 (DROPBOX_ROOT_PATH 이후부터 시작)
-        const rootPath = process.env.DROPBOX_ROOT_PATH || '';
+        // 교재 경로를 기준으로 상대 경로 생성 (대소문자 무시)
         let relativePath = path;
-        if (rootPath && path.toLowerCase().startsWith(rootPath.toLowerCase())) {
-          relativePath = path.substring(rootPath.length);
+        if (textbook.dropbox_path) {
+          // 대소문자 무시하고 교재 경로로 시작하는지 확인
+          if (path.toLowerCase().startsWith(textbook.dropbox_path.toLowerCase())) {
+            relativePath = path.substring(textbook.dropbox_path.length);
+          }
         }
         
+        // 상대 경로를 폴더 구조로 변환
         const relativeParts = relativePath.split('/').filter(Boolean);
         
-        // 첫 번째 부분은 교재명이어야 함 (건너뛰기)
+        // 폴더 구조 생성 (마지막 요소는 파일명이므로 제외)
         let current = acc;
-        for (let i = 1; i < relativeParts.length - 1; i++) {
+        for (let i = 0; i < relativeParts.length - 1; i++) {
           const folderName = relativeParts[i];
-          
-          // 교재명과 동일한 폴더명이면 스킵 (중복 방지, 대소문자 무시)
-          if (folderName.toLowerCase() === textbook.name.toLowerCase()) {
-            console.log(`[Files Tree] 중복 폴더 스킵: ${folderName} (교재: ${textbook.name})`);
-            continue;
-          }
           
           if (!current[folderName]) {
             current[folderName] = {};

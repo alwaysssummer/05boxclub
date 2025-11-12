@@ -162,24 +162,55 @@ export async function fullSync(rootPath?: string): Promise<{
     console.log('[Full Sync] 삭제된 파일 확인 중...');
     
     // Dropbox에 존재하는 파일의 경로 목록
-    const existingDropboxPaths = pdfFiles.map(f => f.path_lower);
+    const existingDropboxPaths = new Set(pdfFiles.map(f => f.path_lower));
     
-    if (existingDropboxPaths.length > 0) {
-      // DB에서 활성화된 파일 중 Dropbox에 없는 파일 비활성화
-      const { data: deletedFiles, error: deleteError } = await supabase
+    if (existingDropboxPaths.size > 0) {
+      // DB에서 모든 활성화된 파일 조회
+      const { data: allActiveFiles, error: fetchError } = await supabase
         .from('files')
-        .update({ is_active: false })
-        .not('dropbox_path', 'in', `(${existingDropboxPaths.map(p => `"${p}"`).join(',')})`)
-        .eq('is_active', true)
-        .select('dropbox_path');
+        .select('id, dropbox_path')
+        .eq('is_active', true);
       
-      if (deleteError) {
-        console.error('[Full Sync] 삭제 처리 오류:', deleteError);
-        results.errors.push(`삭제 처리 실패: ${deleteError.message}`);
-      } else if (deletedFiles && deletedFiles.length > 0) {
-        results.filesDeleted = deletedFiles.length;
-        console.log(`[Full Sync] ${results.filesDeleted}개 파일 비활성화 완료`);
-        deletedFiles.forEach(f => console.log(`  - ${f.dropbox_path}`));
+      if (fetchError) {
+        console.error('[Full Sync] 활성 파일 조회 오류:', fetchError);
+        results.errors.push(`활성 파일 조회 실패: ${fetchError.message}`);
+      } else if (allActiveFiles && allActiveFiles.length > 0) {
+        // Dropbox에 없는 파일 찾기
+        const filesToDeactivate = allActiveFiles.filter(
+          file => !existingDropboxPaths.has(file.dropbox_path)
+        );
+        
+        if (filesToDeactivate.length > 0) {
+          console.log(`[Full Sync] ${filesToDeactivate.length}개 파일 비활성화 대상 발견`);
+          
+          // 배치로 나눠서 비활성화 (1000개씩)
+          const DEACTIVATE_BATCH_SIZE = 1000;
+          for (let i = 0; i < filesToDeactivate.length; i += DEACTIVATE_BATCH_SIZE) {
+            const batch = filesToDeactivate.slice(i, i + DEACTIVATE_BATCH_SIZE);
+            const batchIds = batch.map(f => f.id);
+            
+            const { error: updateError } = await supabase
+              .from('files')
+              .update({ is_active: false })
+              .in('id', batchIds);
+            
+            if (updateError) {
+              console.error(`[Full Sync] 배치 비활성화 오류 (${i}-${i + batch.length}):`, updateError);
+              results.errors.push(`배치 비활성화 실패: ${updateError.message}`);
+            } else {
+              results.filesDeleted += batch.length;
+              console.log(`[Full Sync] ${batch.length}개 파일 비활성화 완료 (${results.filesDeleted}/${filesToDeactivate.length})`);
+            }
+          }
+          
+          console.log('[Full Sync] 비활성화된 파일 (처음 10개):');
+          filesToDeactivate.slice(0, 10).forEach(f => console.log(`  - ${f.dropbox_path}`));
+          if (filesToDeactivate.length > 10) {
+            console.log(`  ... 외 ${filesToDeactivate.length - 10}개`);
+          }
+        } else {
+          console.log('[Full Sync] 비활성화할 파일 없음');
+        }
       }
     } else {
       console.log('[Full Sync] Dropbox에 파일이 없음. 모든 파일 비활성화');
