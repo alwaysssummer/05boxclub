@@ -28,10 +28,18 @@ interface FileItem {
   last_modified: string;
 }
 
+interface CategoryInfo {
+  id: string;
+  name: string;
+  icon: string;
+  display_order: number;
+}
+
 interface TextbookItem {
   id: string;
   name: string;
   dropbox_path: string;
+  category: CategoryInfo | null;
   totalClicks: number;
   fileCount: number;
   children: any;
@@ -41,6 +49,7 @@ export default function LeftSidebar() {
   const { selectFile } = useFile();
   const [textbooks, setTextbooks] = useState<TextbookItem[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['all']));
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'clicks'>('name');
   const [loading, setLoading] = useState(true);
@@ -54,8 +63,12 @@ export default function LeftSidebar() {
       const json = await res.json();
       
       if (json.success) {
+        console.log('[LeftSidebar] 로드된 교재 수:', json.data.length);
         setTextbooks(json.data);
         setLastSync(new Date().toLocaleTimeString('ko-KR'));
+        
+        // 초기 로드 시 모든 카테고리를 닫힌 채로 시작
+        setExpandedCategories(new Set<string>());
       }
     } catch (error) {
       console.error('데이터 로딩 실패:', error);
@@ -88,6 +101,14 @@ export default function LeftSidebar() {
         { event: '*', schema: 'public', table: 'textbooks' },
         () => {
           console.log('[Realtime] 교재 변경 감지 - 새로고침');
+          loadData();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories' },
+        () => {
+          console.log('[Realtime] 카테고리 변경 감지 - 새로고침');
           loadData();
         }
       )
@@ -133,9 +154,46 @@ export default function LeftSidebar() {
     setExpandedFolders(newExpanded);
   };
 
+  // 카테고리 토글
+  const toggleCategory = (categoryId: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(categoryId)) {
+      newExpanded.delete(categoryId);
+    } else {
+      newExpanded.add(categoryId);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
   // 검색 필터
   const filteredTextbooks = textbooks.filter(tb => 
     tb.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // 카테고리별로 교재 그룹화
+  const groupedByCategory = filteredTextbooks.reduce((acc, textbook) => {
+    const categoryId = textbook.category?.id || 'uncategorized';
+    const categoryName = textbook.category?.name || '미분류';
+    const categoryIcon = textbook.category?.icon || '📚';
+    const displayOrder = textbook.category?.display_order || 999;
+    
+    if (!acc[categoryId]) {
+      acc[categoryId] = {
+        id: categoryId,
+        name: categoryName,
+        icon: categoryIcon,
+        displayOrder,
+        textbooks: [],
+      };
+    }
+    
+    acc[categoryId].textbooks.push(textbook);
+    return acc;
+  }, {} as Record<string, { id: string; name: string; icon: string; displayOrder: number; textbooks: TextbookItem[] }>);
+
+  // 카테고리를 display_order 순으로 정렬
+  const sortedCategories = Object.values(groupedByCategory).sort(
+    (a, b) => a.displayOrder - b.displayOrder
   );
 
   // 폴더 트리 렌더링
@@ -258,9 +316,32 @@ export default function LeftSidebar() {
         </div>
       )}
 
-      {/* 중앙: 교재 목록 */}
+      {/* 중앙: 카테고리별 교재 목록 */}
       <div className="flex-1 overflow-y-auto p-2">
-        {filteredTextbooks.map((textbook) => (
+        {sortedCategories.map((category) => (
+          <div key={category.id} className="mb-2">
+            {/* 카테고리 헤더 */}
+            <div
+              className="flex items-center gap-2 px-2 py-1.5 mb-1 bg-muted/50 hover:bg-muted rounded cursor-pointer border-b-2 border-primary/20"
+              onClick={() => toggleCategory(category.id)}
+            >
+              {expandedCategories.has(category.id) ? (
+                <ChevronDown className="w-4 h-4 flex-shrink-0 text-primary" />
+              ) : (
+                <ChevronRight className="w-4 h-4 flex-shrink-0 text-primary" />
+              )}
+              <span className="flex-1 font-semibold text-sm text-primary">
+                {category.name}
+              </span>
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                {category.textbooks.length}
+              </Badge>
+            </div>
+
+            {/* 카테고리 내 교재 목록 */}
+            {expandedCategories.has(category.id) && (
+              <div className="ml-1">
+                {category.textbooks.map((textbook) => (
           <div key={textbook.id} className="mb-1">
             <div
               className="flex items-center gap-1.5 px-2 py-1 hover:bg-accent rounded cursor-pointer"
@@ -318,6 +399,10 @@ export default function LeftSidebar() {
                       </Badge>
                     )}
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
                 ))}
               </div>
             )}

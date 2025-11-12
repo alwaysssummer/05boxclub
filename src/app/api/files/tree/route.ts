@@ -125,7 +125,14 @@ export async function GET(request: Request) {
         textbooks!inner (
           id,
           name,
-          dropbox_path
+          dropbox_path,
+          category_id,
+          categories (
+            id,
+            name,
+            icon,
+            display_order
+          )
         )
       `)
       .eq('is_active', true)
@@ -143,6 +150,8 @@ export async function GET(request: Request) {
       id: string;
       name: string;
       dropbox_path: string;
+      category_id: string | null;
+      category: any;
       files: any[];
       totalClicks: number;
       fileCount: number;
@@ -162,6 +171,8 @@ export async function GET(request: Request) {
           id: textbook.id,
           name: textbook.name,
           dropbox_path: textbook.dropbox_path,
+          category_id: textbook.category_id || null,
+          category: textbook.categories || null,
           files: [],
           totalClicks: 0,
           fileCount: 0,
@@ -198,6 +209,12 @@ export async function GET(request: Request) {
     // 5. 파일 트리 구조 생성
     const tree = textbooksWithStats.map(textbook => {
       const files = textbook.files;
+      const categoryInfo = textbook.category_id ? {
+        id: textbook.category?.id || textbook.category_id,
+        name: textbook.category?.name || '기타',
+        icon: textbook.category?.icon || '📚',
+        display_order: textbook.category?.display_order || 999,
+      } : null;
       
       // 파일을 경로별로 그룹화
       const filesByPath = files.reduce((acc, file) => {
@@ -241,6 +258,7 @@ export async function GET(request: Request) {
         id: textbook.id,
         name: textbook.name,
         dropbox_path: textbook.dropbox_path,
+        category: categoryInfo,
         totalClicks: textbook.totalClicks,
         fileCount: textbook.fileCount,
         children: filesByPath,
