@@ -46,7 +46,7 @@ interface TextbookItem {
 }
 
 export default function LeftSidebar() {
-  const { selectFile } = useFile();
+  const { selectFile, clearFile } = useFile();
   const [textbooks, setTextbooks] = useState<TextbookItem[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['all']));
@@ -147,7 +147,7 @@ export default function LeftSidebar() {
     setSearchQuery('');
     setExpandedFolders(new Set());
     setExpandedCategories(new Set());
-    selectFile(null);
+    clearFile();
   };
 
   // 폴더 토글
