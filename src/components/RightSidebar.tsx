@@ -44,22 +44,29 @@ export default function RightSidebar() {
     try {
       const supabase = createClient();
       
+      if (!supabase) {
+        console.error('Supabase 클라이언트 생성 실패');
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('file_clicks')
         .select(`
           id,
           clicked_at,
-          files!inner:file_id (
+          files:file_id (
             id,
             name,
             click_count
           )
         `)
+        .not('file_id', 'is', null)
         .order('clicked_at', { ascending: false })
         .limit(10);
 
       if (error) {
         console.error('최근 조회 로드 실패:', error);
+        console.error('에러 상세:', JSON.stringify(error, null, 2));
         return;
       }
 
