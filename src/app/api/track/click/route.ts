@@ -4,6 +4,7 @@ import { createApiClient } from '@/lib/supabase/server';
 /**
  * POST /api/track/click
  * 파일 클릭 이벤트를 기록하고 클릭수를 증가시킵니다.
+ * Updated: 2025-11-12 - Fixed Supabase client initialization
  */
 export async function POST(request: NextRequest) {
   try {
