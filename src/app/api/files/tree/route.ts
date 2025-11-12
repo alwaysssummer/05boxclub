@@ -48,9 +48,16 @@ function removeEmptyFolders(obj: any): any {
     if (key === '_files') {
       // 파일 배열도 정렬
       if (obj[key] && obj[key].length > 0) {
-        result[key] = obj[key].sort((a: any, b: any) => 
+        const sortedFiles = obj[key].sort((a: any, b: any) => 
           naturalSort(a.name, b.name)
         );
+        result[key] = sortedFiles;
+        
+        // 디버깅: 정렬 전후 확인
+        if (obj[key].some((f: any) => f.name.includes('한줄'))) {
+          console.log(`[DEBUG removeEmptyFolders] 정렬 전:`, obj[key].map((f: any) => f.name));
+          console.log(`[DEBUG removeEmptyFolders] 정렬 후:`, sortedFiles.map((f: any) => f.name));
+        }
       }
     } else {
       // 하위 폴더는 재귀적으로 정리 및 정렬
@@ -112,32 +119,60 @@ export async function GET(request: Request) {
     console.log('[Files Tree] 교재 목록 조회 시작');
     
     // 1. 활성화된 파일만 조회 (Dropbox에 존재하는 파일)
-    const { data: activeFiles, error: filesError } = await supabase
-      .from('files')
-      .select(`
-        id,
-        name,
-        dropbox_path,
-        file_size,
-        click_count,
-        last_modified,
-        textbook_id,
-        textbooks!inner (
+    // Supabase 기본 제한(1000개)을 우회하기 위해 모든 데이터 가져오기
+    let allFiles: any[] = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data: batchFiles, error: batchError } = await supabase
+        .from('files')
+        .select(`
           id,
           name,
           dropbox_path,
-          category_id,
-          display_order,
-          categories (
+          file_size,
+          click_count,
+          last_modified,
+          textbook_id,
+          textbooks!inner (
             id,
             name,
-            icon,
-            display_order
+            dropbox_path,
+            category_id,
+            display_order,
+            categories (
+              id,
+              name,
+              icon,
+              display_order
+            )
           )
-        )
-      `)
-      .eq('is_active', true)
-      .order('name');
+        `)
+        .eq('is_active', true)
+        .order('name')
+        .range(from, from + batchSize - 1);
+
+      if (batchError) {
+        console.error('[Files Tree] 파일 조회 실패:', batchError);
+        return NextResponse.json(
+          { success: false, error: batchError.message },
+          { status: 500 }
+        );
+      }
+
+      if (batchFiles && batchFiles.length > 0) {
+        allFiles = allFiles.concat(batchFiles);
+        from += batchSize;
+        hasMore = batchFiles.length === batchSize;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    const activeFiles = allFiles;
+    const filesError = null;
     
     if (filesError) {
       console.error('[Files Tree] 파일 조회 실패:', filesError);
@@ -236,6 +271,14 @@ export async function GET(request: Request) {
         display_order: textbook.category?.display_order || 999,
       } : null;
       
+      // 디버깅: 공영2_동아(이) 교재의 파일 확인
+      if (textbook.name === '공영2_동아(이)') {
+        console.log(`[DEBUG] 공영2_동아(이) 파일 수: ${files.length}`);
+        const folder1Files = files.filter(f => f.dropbox_path?.includes('/1과/문장분석/'));
+        console.log(`[DEBUG] 1과/문장분석 파일 수: ${folder1Files.length}`);
+        console.log(`[DEBUG] 1과/문장분석 파일 목록:`, folder1Files.map(f => f.name));
+      }
+      
       // 파일을 경로별로 그룹화
       const filesByPath = files.reduce((acc, file) => {
         const path = file.dropbox_path || '';
@@ -249,8 +292,20 @@ export async function GET(request: Request) {
           }
         }
         
+        // 디버깅: 공영2_동아(이) 1과/문장분석 파일 처리
+        if (textbook.name === '공영2_동아(이)' && path.includes('/1과/문장분석/')) {
+          console.log(`[DEBUG] 파일 처리: ${file.name}`);
+          console.log(`[DEBUG] - 원본 경로: ${path}`);
+          console.log(`[DEBUG] - 상대 경로: ${relativePath}`);
+        }
+        
         // 상대 경로를 폴더 구조로 변환
         const relativeParts = relativePath.split('/').filter(Boolean);
+        
+        // 디버깅: relativeParts 확인
+        if (textbook.name === '공영2_동아(이)' && path.includes('/1과/문장분석/')) {
+          console.log(`[DEBUG] - relativeParts:`, relativeParts);
+        }
         
         // 폴더 구조 생성 (마지막 요소는 파일명이므로 제외)
         let current = acc;
@@ -266,6 +321,11 @@ export async function GET(request: Request) {
         // 마지막 레벨에 파일 추가
         if (!current._files) current._files = [];
         current._files.push(file);
+        
+        // 디버깅: 파일 추가 확인
+        if (textbook.name === '공영2_동아(이)' && path.includes('/1과/문장분석/')) {
+          console.log(`[DEBUG] - 파일 추가 완료: ${file.name}`);
+        }
         
         return acc;
       }, {} as any);
