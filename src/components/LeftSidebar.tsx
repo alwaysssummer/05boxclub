@@ -142,6 +142,14 @@ export default function LeftSidebar() {
     }
   };
 
+  // 초기 상태로 리셋
+  const handleLogoClick = () => {
+    setSearchQuery('');
+    setExpandedFolders(new Set());
+    setExpandedCategories(new Set());
+    selectFile(null);
+  };
+
   // 폴더 토글
   const toggleFolder = (path: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -261,7 +269,11 @@ export default function LeftSidebar() {
       {/* 상단: 타이틀 + 검색 */}
       <div className="p-3 border-b space-y-3">
         {/* 타이틀 */}
-        <div className="flex items-center gap-2 py-1 px-1">
+        <div 
+          className="flex items-center gap-2 py-1 px-1 cursor-pointer hover:bg-accent rounded transition-colors"
+          onClick={handleLogoClick}
+          title="초기 화면으로"
+        >
           <div className="relative">
             <Box className="w-6 h-6 text-gray-800 dark:text-gray-200" strokeWidth={2.5} />
             <div className="absolute inset-0 flex items-center justify-center">
