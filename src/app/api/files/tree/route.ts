@@ -2,7 +2,33 @@ import { NextResponse } from 'next/server';
 import { createApiClient } from '@/lib/supabase/api';
 
 /**
- * 빈 폴더 제거 (재귀적으로 파일이 없는 폴더 삭제)
+ * 파일/폴더 이름에서 숫자를 추출하여 정렬용 키 생성
+ */
+function extractSortKey(name: string): { number: number; text: string } {
+  // unit 1, unit.1, unit_1, unit1 등 다양한 형태 지원
+  const match = name.match(/(\d+)/);
+  const number = match ? parseInt(match[1], 10) : 999999;
+  return { number, text: name.toLowerCase() };
+}
+
+/**
+ * 파일/폴더를 자연스러운 순서로 정렬
+ */
+function naturalSort(a: string, b: string): number {
+  const aKey = extractSortKey(a);
+  const bKey = extractSortKey(b);
+  
+  // 숫자가 다르면 숫자 순서로
+  if (aKey.number !== bKey.number) {
+    return aKey.number - bKey.number;
+  }
+  
+  // 숫자가 같으면 텍스트 순서로
+  return aKey.text.localeCompare(bKey.text);
+}
+
+/**
+ * 빈 폴더 제거 및 정렬 (재귀적으로 파일이 없는 폴더 삭제, 파일/폴더 정렬)
  */
 function removeEmptyFolders(obj: any): any {
   if (!obj || typeof obj !== 'object') {
@@ -11,14 +37,23 @@ function removeEmptyFolders(obj: any): any {
   
   const result: any = {};
   
-  for (const key in obj) {
+  // 키를 정렬 (폴더명을 숫자 순서로)
+  const sortedKeys = Object.keys(obj).sort((a, b) => {
+    if (a === '_files') return 1; // _files는 항상 마지막
+    if (b === '_files') return -1;
+    return naturalSort(a, b);
+  });
+  
+  for (const key of sortedKeys) {
     if (key === '_files') {
-      // 파일 배열은 그대로 유지
+      // 파일 배열도 정렬
       if (obj[key] && obj[key].length > 0) {
-        result[key] = obj[key];
+        result[key] = obj[key].sort((a: any, b: any) => 
+          naturalSort(a.name, b.name)
+        );
       }
     } else {
-      // 하위 폴더는 재귀적으로 정리
+      // 하위 폴더는 재귀적으로 정리 및 정렬
       const cleaned = removeEmptyFolders(obj[key]);
       
       // 하위에 파일이나 폴더가 있으면 유지
