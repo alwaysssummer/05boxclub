@@ -77,7 +77,17 @@ export default function RightSidebar() {
       for (const item of data || []) {
         const fileData = item.files as any;
         if (fileData && typeof fileData === 'object' && fileData.id && !seenFileIds.has(fileData.id)) {
-          uniqueFiles.push(item as RecentFile);
+          // files가 배열이 아닌 단일 객체로 변환
+          const recentFile: RecentFile = {
+            id: item.id,
+            clicked_at: item.clicked_at,
+            files: {
+              id: fileData.id,
+              name: fileData.name,
+              click_count: fileData.click_count
+            }
+          };
+          uniqueFiles.push(recentFile);
           seenFileIds.add(fileData.id);
         }
       }
