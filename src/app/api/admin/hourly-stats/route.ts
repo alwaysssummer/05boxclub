@@ -17,40 +17,51 @@ export async function GET(request: NextRequest) {
     
     const supabase = createApiClient();
 
-    // 날짜 설정
-    let targetDate: Date;
+    // 날짜 설정 - 한국 시간대(KST, UTC+9) 기준
+    const KST_OFFSET = 9 * 60 * 60 * 1000; // 9시간을 밀리초로
+    let kstTargetDate: Date;
+    
     if (dateParam) {
-      targetDate = new Date(dateParam);
+      // YYYY-MM-DD 형식의 날짜를 KST 기준으로 파싱
+      kstTargetDate = new Date(dateParam + 'T00:00:00+09:00');
     } else {
-      targetDate = new Date();
-      targetDate.setHours(0, 0, 0, 0);
+      const now = new Date();
+      const kstNow = new Date(now.getTime() + KST_OFFSET);
+      kstTargetDate = new Date(kstNow);
+      kstTargetDate.setUTCHours(0, 0, 0, 0);
     }
 
-    // 시작/종료 시간
-    const startDate = new Date(targetDate);
-    startDate.setHours(0, 0, 0, 0);
+    // KST 기준 시작/종료 시간
+    const startDate = new Date(kstTargetDate);
+    startDate.setUTCHours(0, 0, 0, 0);
     
-    const endDate = new Date(targetDate);
-    endDate.setHours(23, 59, 59, 999);
+    const endDate = new Date(kstTargetDate);
+    endDate.setUTCHours(23, 59, 59, 999);
+    
+    // UTC로 변환
+    const utcStartDate = new Date(startDate.getTime() - KST_OFFSET);
+    const utcEndDate = new Date(endDate.getTime() - KST_OFFSET);
 
     // 해당 날짜의 모든 클릭 조회
     const { data: clicks, error: clicksError } = await supabase
       .from('file_clicks')
       .select('clicked_at')
-      .gte('clicked_at', startDate.toISOString())
-      .lte('clicked_at', endDate.toISOString())
+      .gte('clicked_at', utcStartDate.toISOString())
+      .lte('clicked_at', utcEndDate.toISOString())
       .order('clicked_at', { ascending: true });
 
     if (clicksError) {
       throw clicksError;
     }
 
-    // 시간대별로 그룹화 (0시~23시)
+    // 시간대별로 그룹화 (0시~23시, KST 기준)
     const hourlyData: { hour: number; count: number }[] = [];
     const hourCounts = new Array(24).fill(0);
 
     clicks?.forEach(click => {
-      const hour = new Date(click.clicked_at).getHours();
+      const utcDate = new Date(click.clicked_at);
+      const kstDate = new Date(utcDate.getTime() + KST_OFFSET);
+      const hour = kstDate.getUTCHours();
       hourCounts[hour]++;
     });
 
@@ -74,7 +85,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      date: targetDate.toISOString().split('T')[0],
+      date: kstTargetDate.toISOString().split('T')[0],
       hourlyData,
       summary: {
         totalClicks,

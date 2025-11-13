@@ -17,45 +17,56 @@ export async function GET(request: NextRequest) {
     
     const supabase = createApiClient();
 
-    // 기간 계산
+    // 기간 계산 - 한국 시간대(KST, UTC+9) 기준
     const now = new Date();
-    const startDate = new Date();
+    const KST_OFFSET = 9 * 60 * 60 * 1000; // 9시간을 밀리초로
+    const kstNow = new Date(now.getTime() + KST_OFFSET);
+    const startDate = new Date(kstNow);
     
     switch (period) {
       case 'today':
-        startDate.setHours(0, 0, 0, 0);
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
       case 'week':
-        startDate.setDate(now.getDate() - 7);
+        startDate.setTime(kstNow.getTime() - (7 * 24 * 60 * 60 * 1000));
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
       case 'month':
       default:
-        startDate.setDate(now.getDate() - 30);
+        startDate.setTime(kstNow.getTime() - (30 * 24 * 60 * 60 * 1000));
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
     }
+    
+    // KST 기준 시작 시간을 UTC로 변환
+    const utcStartDate = new Date(startDate.getTime() - KST_OFFSET);
 
-    // 1. 시간대별 클릭 데이터 (0~23시)
+    // 1. 시간대별 클릭 데이터 (0~23시, KST 기준)
     const { data: hourlyData } = await supabase
       .from('file_clicks')
       .select('clicked_at')
-      .gte('clicked_at', startDate.toISOString());
+      .gte('clicked_at', utcStartDate.toISOString());
 
-    // 시간대별 그룹화
+    // 시간대별 그룹화 (KST 기준)
     const hourlyStats = Array.from({ length: 24 }, (_, hour) => ({
       hour: `${hour}:00`,
       count: 0,
     }));
 
     hourlyData?.forEach(click => {
-      const hour = new Date(click.clicked_at).getHours();
+      const utcDate = new Date(click.clicked_at);
+      const kstDate = new Date(utcDate.getTime() + KST_OFFSET);
+      const hour = kstDate.getUTCHours();
       hourlyStats[hour].count++;
     });
 
-    // 2. 일별 클릭 데이터 (최근 30일)
+    // 2. 일별 클릭 데이터 (최근 30일, KST 기준)
     const dailyMap = new Map<string, number>();
     
     hourlyData?.forEach(click => {
-      const date = new Date(click.clicked_at).toISOString().split('T')[0];
+      const utcDate = new Date(click.clicked_at);
+      const kstDate = new Date(utcDate.getTime() + KST_OFFSET);
+      const date = kstDate.toISOString().split('T')[0];
       dailyMap.set(date, (dailyMap.get(date) || 0) + 1);
     });
 
@@ -89,14 +100,16 @@ export async function GET(request: NextRequest) {
       textbookName: file.chapters?.textbooks?.name || '알 수 없음',
     })) || [];
 
-    // 4. 요일별 통계 (월~일)
+    // 4. 요일별 통계 (월~일, KST 기준)
     const weekdayStats = Array.from({ length: 7 }, (_, i) => ({
       day: ['일', '월', '화', '수', '목', '금', '토'][i],
       count: 0,
     }));
 
     hourlyData?.forEach(click => {
-      const day = new Date(click.clicked_at).getDay();
+      const utcDate = new Date(click.clicked_at);
+      const kstDate = new Date(utcDate.getTime() + KST_OFFSET);
+      const day = kstDate.getUTCDay();
       weekdayStats[day].count++;
     });
 

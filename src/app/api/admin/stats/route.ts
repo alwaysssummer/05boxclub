@@ -31,30 +31,36 @@ export async function GET(request: NextRequest) {
       ? new Set(visitorData.map(v => v.user_ip)).size 
       : 0;
 
-    // 2. 기간별 다운로드 수 (file_clicks 수)
+    // 2. 기간별 다운로드 수 (file_clicks 수) - 한국 시간대(KST, UTC+9) 기준
     const now = new Date();
+    const KST_OFFSET = 9 * 60 * 60 * 1000; // 9시간을 밀리초로
+    const kstNow = new Date(now.getTime() + KST_OFFSET);
     let startDate: Date;
 
     switch (period) {
       case 'week':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 7);
+        startDate = new Date(kstNow.getTime() - (7 * 24 * 60 * 60 * 1000));
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
       case 'month':
-        startDate = new Date(now);
-        startDate.setMonth(now.getMonth() - 1);
+        startDate = new Date(kstNow);
+        startDate.setUTCMonth(kstNow.getUTCMonth() - 1);
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
       case 'today':
       default:
-        startDate = new Date(now);
-        startDate.setHours(0, 0, 0, 0);
+        startDate = new Date(kstNow);
+        startDate.setUTCHours(0, 0, 0, 0);
         break;
     }
+    
+    // KST 기준 시작 시간을 UTC로 변환
+    const utcStartDate = new Date(startDate.getTime() - KST_OFFSET);
 
     const { count: downloadCount, error: downloadError } = await supabase
       .from('file_clicks')
       .select('*', { count: 'exact', head: true })
-      .gte('clicked_at', startDate.toISOString());
+      .gte('clicked_at', utcStartDate.toISOString());
 
     if (downloadError) {
       console.error('다운로드 조회 실패:', downloadError);
@@ -78,41 +84,45 @@ export async function GET(request: NextRequest) {
       console.error('요청 조회 실패:', requestError);
     }
 
-    // 5. 추가 통계 (선택사항)
+    // 5. 추가 통계 (선택사항) - 한국 시간대(KST) 기준
     // 오늘 클릭 수
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const todayStart = new Date(kstNow);
+    todayStart.setUTCHours(0, 0, 0, 0);
+    const utcTodayStart = new Date(todayStart.getTime() - KST_OFFSET);
 
     const { count: todayClicks, error: todayClicksError } = await supabase
       .from('file_clicks')
       .select('*', { count: 'exact', head: true })
-      .gte('clicked_at', todayStart.toISOString());
+      .gte('clicked_at', utcTodayStart.toISOString());
 
     if (todayClicksError) {
       console.error('오늘 클릭 조회 실패:', todayClicksError);
     }
 
     // 이번 주 클릭 수
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - 7);
+    const weekStart = new Date(kstNow.getTime() - (7 * 24 * 60 * 60 * 1000));
+    weekStart.setUTCHours(0, 0, 0, 0);
+    const utcWeekStart = new Date(weekStart.getTime() - KST_OFFSET);
 
     const { count: weekClicks, error: weekClicksError } = await supabase
       .from('file_clicks')
       .select('*', { count: 'exact', head: true })
-      .gte('clicked_at', weekStart.toISOString());
+      .gte('clicked_at', utcWeekStart.toISOString());
 
     if (weekClicksError) {
       console.error('이번 주 클릭 조회 실패:', weekClicksError);
     }
 
     // 이번 달 클릭 수
-    const monthStart = new Date();
-    monthStart.setMonth(monthStart.getMonth() - 1);
+    const monthStart = new Date(kstNow);
+    monthStart.setUTCMonth(kstNow.getUTCMonth() - 1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const utcMonthStart = new Date(monthStart.getTime() - KST_OFFSET);
 
     const { count: monthClicks, error: monthClicksError } = await supabase
       .from('file_clicks')
       .select('*', { count: 'exact', head: true })
-      .gte('clicked_at', monthStart.toISOString());
+      .gte('clicked_at', utcMonthStart.toISOString());
 
     if (monthClicksError) {
       console.error('이번 달 클릭 조회 실패:', monthClicksError);
