@@ -265,7 +265,8 @@ export default function AdminDashboardPage() {
               {topTextbooks.map((textbook, index) => (
                 <div
                   key={textbook.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  onClick={() => window.location.href = `/admin/textbooks/${textbook.id}`}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className={`
