@@ -43,8 +43,10 @@ interface Textbook {
 
 interface File {
   id: string;
-  file_name: string;
-  file_path: string;
+  name: string;
+  file_name?: string;
+  file_path?: string;
+  dropbox_path?: string;
   click_count: number;
   is_active: boolean;
   last_modified: string;
@@ -440,9 +442,11 @@ export default function TextbookDetailPage() {
                         <span className="text-muted-foreground">{index + 1}</span>
                       )}
                     </TableCell>
-                    <TableCell className="font-medium">{file.file_name}</TableCell>
+                    <TableCell className="font-medium">
+                      {file.name || file.file_name || '파일명 없음'}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                      {file.file_path}
+                      {file.dropbox_path || file.file_path || '-'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">

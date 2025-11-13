@@ -132,6 +132,9 @@ export async function GET(
       }
     }
 
+    // 실제 파일 클릭 수의 합계 계산
+    const actualTotalClicks = files?.reduce((sum, file) => sum + (file.click_count || 0), 0) || 0;
+
     return NextResponse.json({
       success: true,
       textbook,
@@ -140,7 +143,7 @@ export async function GET(
       dailyClicks: dailyClicks || [],
       statistics: {
         totalFiles: files?.length || 0,
-        totalClicks: textbook.total_clicks || 0,
+        totalClicks: actualTotalClicks,
         activeFiles: files?.filter(f => f.is_active).length || 0,
         totalFolders: folderStatsArray.length,
       },
