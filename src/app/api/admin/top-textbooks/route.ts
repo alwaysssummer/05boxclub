@@ -33,87 +33,18 @@ export async function GET(request: NextRequest) {
     }
 
     // 교재별 클릭수 집계
-    // 1. 모든 교재 조회 (is_active 컬럼이 없으므로 제거)
+    // 1. 모든 교재 조회
     const { data: textbooks, error: textbooksError } = await supabase
       .from('textbooks')
       .select(`
         id,
         name,
         dropbox_path,
-        created_at,
-        chapters (
-          id,
-          files (
-            id,
-            click_count,
-            is_active
-          )
-        )
+        created_at
       `);
 
     if (textbooksError) {
-      console.error('교재 조회 실패:', textbooksError);
-      // 관계 설정이 안되어 있을 수 있으므로 기본 조회로 폴백
-      const { data: basicTextbooks, error: basicError } = await supabase
-        .from('textbooks')
-        .select('id, name, dropbox_path, created_at');
-
-      if (basicError) {
-        throw new Error(`교재 조회 실패: ${basicError.message}`);
-      }
-
-      // 기본 조회 성공 시 파일 클릭수는 별도 조회
-      const textbookStats = await Promise.all(
-        (basicTextbooks || []).map(async (textbook) => {
-          // 해당 교재의 파일들 조회
-          const { data: chapters } = await supabase
-            .from('chapters')
-            .select('id')
-            .eq('textbook_id', textbook.id);
-
-          if (!chapters || chapters.length === 0) {
-            return {
-              id: textbook.id,
-              name: textbook.name,
-              dropbox_path: textbook.dropbox_path,
-              totalClicks: 0,
-              fileCount: 0,
-              created_at: textbook.created_at,
-            };
-          }
-
-          const chapterIds = chapters.map(ch => ch.id);
-          
-          const { data: files } = await supabase
-            .from('files')
-            .select('click_count')
-            .in('chapter_id', chapterIds)
-            .eq('is_active', true);
-
-          const totalClicks = files?.reduce((sum, f) => sum + f.click_count, 0) || 0;
-
-          return {
-            id: textbook.id,
-            name: textbook.name,
-            dropbox_path: textbook.dropbox_path,
-            totalClicks,
-            fileCount: files?.length || 0,
-            created_at: textbook.created_at,
-          };
-        })
-      );
-
-      const topTextbooks = textbookStats
-        .sort((a, b) => b.totalClicks - a.totalClicks)
-        .slice(0, limit);
-
-      return NextResponse.json({
-        success: true,
-        textbooks: topTextbooks,
-        count: topTextbooks.length,
-        period,
-        timestamp: new Date().toISOString(),
-      });
+      throw new Error(`교재 조회 실패: ${textbooksError.message}`);
     }
 
     // 2. 기간별 클릭 데이터 조회 (필요시)
@@ -141,32 +72,38 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. 교재별 통계 계산
-    const textbookStats = textbooks?.map(textbook => {
-      const allFiles = textbook.chapters?.flatMap(ch => ch.files || []) || [];
-      const activeFiles = allFiles.filter(f => f.is_active);
+    const textbookStats = await Promise.all(
+      (textbooks || []).map(async (textbook) => {
+        // 해당 교재의 활성 파일들 조회
+        const { data: files } = await supabase
+          .from('files')
+          .select('id, click_count')
+          .eq('textbook_id', textbook.id)
+          .eq('is_active', true);
 
-      let totalClicks = 0;
-      
-      if (period === 'all') {
-        // 전체 기간: click_count 합산
-        totalClicks = activeFiles.reduce((sum, file) => sum + file.click_count, 0);
-      } else {
-        // 특정 기간: 기간별 클릭 데이터 사용
-        totalClicks = activeFiles.reduce((sum, file) => {
-          const periodClick = periodClicks.find(pc => pc.file_id === file.id);
-          return sum + (periodClick?.count || 0);
-        }, 0);
-      }
+        let totalClicks = 0;
+        
+        if (period === 'all') {
+          // 전체 기간: click_count 합산
+          totalClicks = files?.reduce((sum, file) => sum + (file.click_count || 0), 0) || 0;
+        } else {
+          // 특정 기간: 기간별 클릭 데이터 사용
+          totalClicks = files?.reduce((sum, file) => {
+            const periodClick = periodClicks.find(pc => pc.file_id === file.id);
+            return sum + (periodClick?.count || 0);
+          }, 0) || 0;
+        }
 
-      return {
-        id: textbook.id,
-        name: textbook.name,
-        dropbox_path: textbook.dropbox_path,
-        totalClicks,
-        fileCount: activeFiles.length,
-        created_at: textbook.created_at,
-      };
-    }) || [];
+        return {
+          id: textbook.id,
+          name: textbook.name,
+          dropbox_path: textbook.dropbox_path,
+          totalClicks,
+          fileCount: files?.length || 0,
+          created_at: textbook.created_at,
+        };
+      })
+    );
 
     // 4. 클릭수 기준 정렬 및 제한
     const topTextbooks = textbookStats
