@@ -8,9 +8,12 @@ import {
   BookOpen, 
   MessageSquare,
   TrendingUp,
-  RefreshCw
+  RefreshCw,
+  FolderOpen,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface Stats {
   totalVisitors: number;
@@ -26,6 +29,23 @@ interface TopTextbook {
   fileCount: number;
 }
 
+interface TopFolder {
+  textbookId: string;
+  textbookName: string;
+  folderName: string;
+  totalClicks: number;
+  fileCount: number;
+}
+
+interface TopFile {
+  id: string;
+  fileName: string;
+  textbookId: string;
+  textbookName: string;
+  folderName: string;
+  clickCount: number;
+}
+
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<Stats>({
     totalVisitors: 0,
@@ -34,8 +54,12 @@ export default function AdminDashboardPage() {
     pendingRequests: 0,
   });
   const [topTextbooks, setTopTextbooks] = useState<TopTextbook[]>([]);
+  const [topFolders, setTopFolders] = useState<TopFolder[]>([]);
+  const [topFiles, setTopFiles] = useState<TopFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [topTextbooksLoading, setTopTextbooksLoading] = useState(true);
+  const [topFoldersLoading, setTopFoldersLoading] = useState(true);
+  const [topFilesLoading, setTopFilesLoading] = useState(true);
   const [lastSync, setLastSync] = useState<string>('');
 
   const loadStats = async () => {
@@ -101,9 +125,45 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const loadTopFolders = async () => {
+    setTopFoldersLoading(true);
+    try {
+      const response = await fetch('/api/admin/top-folders?limit=5');
+      const data = await response.json();
+      
+      if (data.success && data.folders) {
+        setTopFolders(data.folders);
+      }
+    } catch (error) {
+      console.error('인기 폴더 로딩 실패:', error);
+      setTopFolders([]);
+    } finally {
+      setTopFoldersLoading(false);
+    }
+  };
+
+  const loadTopFiles = async () => {
+    setTopFilesLoading(true);
+    try {
+      const response = await fetch('/api/admin/top-files?limit=10');
+      const data = await response.json();
+      
+      if (data.success && data.files) {
+        setTopFiles(data.files);
+      }
+    } catch (error) {
+      console.error('인기 파일 로딩 실패:', error);
+      setTopFiles([]);
+    } finally {
+      setTopFilesLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadStats();
     loadTopTextbooks();
+    loadTopFolders();
+    loadTopFiles();
   }, []);
 
   const statCards = [
@@ -298,19 +358,116 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Placeholder for Charts */}
+      {/* 인기 폴더 TOP 5 */}
       <Card>
         <CardHeader>
-          <CardTitle>시간대별 접속 통계 (준비 중)</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FolderOpen className="h-5 w-5" />
+            인기 폴더 TOP 5
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-64 flex items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>24시간 접속 그래프가 여기 표시됩니다</p>
-              <p className="text-sm mt-2">곧 추가 예정</p>
+          {topFoldersLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-12 bg-muted animate-pulse rounded" />
+              ))}
             </div>
-          </div>
+          ) : topFolders.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              폴더 데이터가 없습니다
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {topFolders.map((folder, index) => (
+                <div
+                  key={`${folder.textbookId}-${folder.folderName}`}
+                  onClick={() => window.location.href = `/admin/textbooks/${folder.textbookId}`}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`
+                      flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm flex-shrink-0
+                      ${index === 0 ? 'bg-yellow-500 text-white' : ''}
+                      ${index === 1 ? 'bg-gray-400 text-white' : ''}
+                      ${index === 2 ? 'bg-orange-600 text-white' : ''}
+                      ${index > 2 ? 'bg-muted text-muted-foreground' : ''}
+                    `}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {folder.textbookName} <span className="text-muted-foreground">›</span> {folder.folderName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {folder.fileCount}개 파일
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-lg text-blue-600">
+                      {folder.totalClicks.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">클릭</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 인기 파일 TOP 10 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            인기 파일 TOP 10
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {topFilesLoading ? (
+            <div className="space-y-3">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="h-12 bg-muted animate-pulse rounded" />
+              ))}
+            </div>
+          ) : topFiles.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              파일 데이터가 없습니다
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {topFiles.map((file, index) => (
+                <div
+                  key={file.id}
+                  onClick={() => window.location.href = `/admin/textbooks/${file.textbookId}`}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className={`
+                      flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm flex-shrink-0
+                      ${index === 0 ? 'bg-yellow-500 text-white' : ''}
+                      ${index === 1 ? 'bg-gray-400 text-white' : ''}
+                      ${index === 2 ? 'bg-orange-600 text-white' : ''}
+                      ${index > 2 ? 'bg-muted text-muted-foreground' : ''}
+                    `}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{file.fileName}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {file.textbookName} <span>›</span> {file.folderName}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="flex-shrink-0">
+                    {file.clickCount.toLocaleString()}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
