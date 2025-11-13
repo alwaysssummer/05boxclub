@@ -76,7 +76,7 @@ export default function AdminDashboardPage() {
   const loadTopTextbooks = async () => {
     setTopTextbooksLoading(true);
     try {
-      const response = await fetch('/api/admin/top-textbooks?limit=5');
+      const response = await fetch('/api/admin/top-textbooks?limit=10');
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -246,13 +246,13 @@ export default function AdminDashboardPage() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <TrendingUp className="h-5 w-5" />
-            인기 교재 TOP 5
+            인기 교재 TOP 10
           </CardTitle>
         </CardHeader>
         <CardContent>
           {topTextbooksLoading ? (
             <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
+              {[...Array(10)].map((_, i) => (
                 <div key={i} className="h-12 bg-muted animate-pulse rounded" />
               ))}
             </div>
@@ -269,7 +269,7 @@ export default function AdminDashboardPage() {
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className={`
-                      flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm
+                      flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm flex-shrink-0
                       ${index === 0 ? 'bg-yellow-500 text-white' : ''}
                       ${index === 1 ? 'bg-gray-400 text-white' : ''}
                       ${index === 2 ? 'bg-orange-600 text-white' : ''}
