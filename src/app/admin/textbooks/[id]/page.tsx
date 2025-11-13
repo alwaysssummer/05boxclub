@@ -259,34 +259,55 @@ export default function TextbookDetailPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {folderStats.map((folder) => (
-                <Card key={folder.folderName} className="border-2">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <FolderOpen className="h-4 w-4 text-blue-500" />
-                      {folder.folderName}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">파일 수</span>
-                      <span className="font-medium">{folder.fileCount}개</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">총 클릭</span>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-12">순위</TableHead>
+                  <TableHead>폴더명</TableHead>
+                  <TableHead className="text-center">파일 수</TableHead>
+                  <TableHead className="text-right">총 클릭</TableHead>
+                  <TableHead className="text-right">평균 클릭</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {folderStats.map((folder, index) => (
+                  <TableRow key={folder.folderName} className="hover:bg-muted/50">
+                    <TableCell>
+                      {index < 3 ? (
+                        <Badge variant="outline" className="w-8 justify-center">
+                          {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-center block">
+                          {index + 1}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <FolderOpen className="h-4 w-4 text-blue-500" />
+                        {folder.folderName}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="secondary">
+                        {folder.fileCount}개
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
                       <span className="font-bold text-blue-600">
                         {folder.totalClicks.toLocaleString()}
                       </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">평균 클릭</span>
-                      <span className="font-medium">{folder.avgClicks}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline">
+                        {folder.avgClicks}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}
