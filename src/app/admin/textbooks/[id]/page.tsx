@@ -13,7 +13,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, BookOpen, Eye, FileText, TrendingUp } from 'lucide-react';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { ArrowLeft, BookOpen, Eye, FileText, TrendingUp, FolderOpen } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -53,6 +59,16 @@ interface Statistics {
   totalFiles: number;
   totalClicks: number;
   activeFiles: number;
+  totalFolders?: number;
+}
+
+interface FolderStats {
+  folderName: string;
+  folderPath: string;
+  files: File[];
+  totalClicks: number;
+  fileCount: number;
+  avgClicks: number;
 }
 
 export default function TextbookDetailPage() {
@@ -62,6 +78,7 @@ export default function TextbookDetailPage() {
 
   const [textbook, setTextbook] = useState<Textbook | null>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const [folderStats, setFolderStats] = useState<FolderStats[]>([]);
   const [dailyClicks, setDailyClicks] = useState<DailyClick[]>([]);
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +97,7 @@ export default function TextbookDetailPage() {
       if (data.success) {
         setTextbook(data.textbook);
         setFiles(data.files);
+        setFolderStats(data.folderStats || []);
         setDailyClicks(data.dailyClicks);
         setStatistics(data.statistics);
       }
@@ -228,10 +246,138 @@ export default function TextbookDetailPage() {
         </Card>
       )}
 
-      {/* 파일 목록 */}
+      {/* 폴더별 통계 */}
+      {folderStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" />
+              폴더별 통계
+            </CardTitle>
+            <CardDescription>
+              단원(폴더)별 클릭 수 집계
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {folderStats.map((folder) => (
+                <Card key={folder.folderName} className="border-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4 text-blue-500" />
+                      {folder.folderName}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">파일 수</span>
+                      <span className="font-medium">{folder.fileCount}개</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">총 클릭</span>
+                      <span className="font-bold text-blue-600">
+                        {folder.totalClicks.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">평균 클릭</span>
+                      <span className="font-medium">{folder.avgClicks}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 폴더별 파일 목록 (아코디언) */}
+      {folderStats.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>폴더별 파일 상세</CardTitle>
+            <CardDescription>
+              각 폴더의 파일 목록 및 클릭수
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Accordion type="single" collapsible className="w-full">
+              {folderStats.map((folder) => (
+                <AccordionItem key={folder.folderName} value={folder.folderName}>
+                  <AccordionTrigger>
+                    <div className="flex items-center justify-between w-full pr-4">
+                      <div className="flex items-center gap-2">
+                        <FolderOpen className="h-4 w-4 text-blue-500" />
+                        <span className="font-medium">{folder.folderName}</span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <Badge variant="secondary">
+                          {folder.fileCount}개 파일
+                        </Badge>
+                        <Badge variant="default">
+                          {folder.totalClicks.toLocaleString()} 클릭
+                        </Badge>
+                      </div>
+                    </div>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">순위</TableHead>
+                          <TableHead>파일명</TableHead>
+                          <TableHead className="w-24 text-right">클릭수</TableHead>
+                          <TableHead className="w-20">상태</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {folder.files
+                          .sort((a, b) => (b.click_count || 0) - (a.click_count || 0))
+                          .map((file, index) => (
+                            <TableRow key={file.id}>
+                              <TableCell>
+                                {index < 3 ? (
+                                  <Badge variant="outline" className="w-8 justify-center">
+                                    {index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-center block">
+                                    {index + 1}
+                                  </span>
+                                )}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {file.file_name || file.name}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant="secondary">
+                                  {(file.click_count || 0).toLocaleString()}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  variant={file.is_active ? 'default' : 'outline'}
+                                  className="text-xs"
+                                >
+                                  {file.is_active ? '활성' : '비활성'}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 전체 파일 목록 */}
       <Card>
         <CardHeader>
-          <CardTitle>파일 목록</CardTitle>
+          <CardTitle>전체 파일 목록</CardTitle>
           <CardDescription>
             파일별 클릭수 (클릭수 많은 순)
           </CardDescription>
